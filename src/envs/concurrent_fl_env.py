@@ -288,21 +288,22 @@ class ConcurrentFLRoutingEnv:
         if reached:
             return self.r_success, {"reason": "reached"}
 
-        # 链路竞争惩罚：其他GBS也在使用同一条链路（加强）
+        # 链路竞争惩罚：其他GBS也在使用同一条链路
         flows_on_link = self.link_active_flows.get((cur, nxt), 0)
         compete_penalty = self.r_compete * flows_on_link
 
-        # 路径多样性奖励：检查其他GBS是否已经走过这条链路
+        # 路径多样性奖励（可配置，默认关闭）
         other_paths_used = self._link_used_by_others(gbs, cur, nxt)
         diversity_r = -self.r_diversity if other_paths_used else self.r_diversity
 
-        # 有效带宽（考虑竞争）
+        # 有效带宽（考虑竞争后的实际可用带宽）
         eff_bw = self._effective_bandwidth(cur, nxt)
         link_delay = (self.delay_model.cfg.model_size + self.delay_model.cfg.packet_size) / eff_bw
         delay_penalty = self.delay_model.normalize_delay(link_delay)
 
         node_load_r = 1.0 - self.topo.node_load_ratio(nxt)
-        link_load_r = 1.0 - self.topo.link_load_ratio(cur, nxt)
+        # 链路负载奖励：基于有效带宽而非原始负载率，更准确反映竞争影响
+        link_load_r = eff_bw / max(self.topo.max_capacity(cur, nxt), 1.0)
         distr_cost = self._distribution_cost(nxt)
 
         r = (self.g_hop
@@ -326,7 +327,10 @@ class ConcurrentFLRoutingEnv:
         t_up, _ = self.delay_model.upload_delay(success_paths, self.topo)
         if t_up == float('inf'):
             return 0.0
-        return self.beta_tup * (1.0 - self.delay_model.normalize_delay(t_up))
+        # 使用指数衰减让T_up奖励更有区分度：T_up越小奖励越高，差距更大
+        # normalize_delay 用 max_delay=50s 让奖励在常见范围内有更大梯度
+        norm = min(t_up / 50.0, 1.0)
+        return self.beta_tup * math.exp(-2.0 * norm)
 
     def _distribution_cost(self, node: int) -> float:
         succs = self.topo.successors(node)

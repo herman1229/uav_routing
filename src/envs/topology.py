@@ -97,9 +97,12 @@ class NetworkTopology:
                     g.add_edge(R0 + i, R0 + j)
                     g.add_edge(R0 + j, R0 + i)
 
-        # 最后2个Router -> Server
-        g.add_edge(R0 + self.num_routers - 2, self.server_id)
-        g.add_edge(R0 + self.num_routers - 1, self.server_id)
+        # Router -> Server：出口数量 = max(2, num_routers//2)
+        # 5-Router用3个出口，4-Router用2个出口，3-Router用2个出口
+        num_exits = max(2, self.num_routers // 2 + (1 if self.num_routers >= 5 else 0))
+        for k in range(num_exits):
+            exit_router = R0 + self.num_routers - 1 - k
+            g.add_edge(exit_router, self.server_id)
 
         return g
 

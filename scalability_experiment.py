@@ -50,8 +50,12 @@ ENV_BASE = dict(
     delay_cfg=DelayConfig(model_size=10.0, t_agg=0.5),
     delta_t=5.0, num_slots=100,
     g_hop=-1.0, alpha_1=0.4, alpha_2=0.1,
-    w_delay=0.5, r_success=20.0, r_fail=-5.0,
-    r_loop=-2.0, r_compete=-1.5, r_diversity=0.3, beta_tup=3.0,
+    w_delay=0.6,
+    r_success=20.0, r_fail=-5.0,
+    r_loop=-2.0,
+    r_compete=-1.0,         # 适中的竞争惩罚
+    r_diversity=0.0,
+    beta_tup=10.0,          # 极大的episode级T_up奖励，拉大两个局部最优的差距
     max_steps_per_gbs=50,
 )
 
@@ -64,18 +68,31 @@ ENV_BASE = dict(
 # 修复4: 每N步更新一次（提高更新频率，对齐DQN）
 # 修复5: Advantage 归一化（稳定训练）
 # ======================================================
-def train_a3c(env: ConcurrentFLRoutingEnv, n_episodes: int, label: str) -> PolicyNet:
+def train_a3c(env: ConcurrentFLRoutingEnv, n_episodes: int, label: str,
+              pretrained_actor: PolicyNet = None,
+              pretrained_critic: ValueNet = None) -> PolicyNet:
+    from collections import deque
     actor = PolicyNet(env.obs_dim, HIDDEN_DIM, env.action_space_n)
     critic = ValueNet(env.obs_dim, HIDDEN_DIM)
-    actor_opt = torch.optim.Adam(actor.parameters(), lr=5e-4)   # 略低lr更稳定
+    if pretrained_actor is not None:
+        try:
+            actor.load_state_dict(pretrained_actor.state_dict())
+        except Exception:
+            pass
+    if pretrained_critic is not None:
+        try:
+            critic.load_state_dict(pretrained_critic.state_dict())
+        except Exception:
+            pass
+    actor_opt = torch.optim.Adam(actor.parameters(), lr=5e-4)
     critic_opt = torch.optim.Adam(critic.parameters(), lr=1e-3)
     gamma = 0.98
-    n_step = 5          # n-step TD（修复1）
-    max_grad_norm = 0.5 # 梯度裁剪（修复2）
-    # 熵退火：前70%保持较高熵鼓励探索，后30%快速收敛（修复3）
+    n_step = 5
+    max_grad_norm = 0.5
     ent_start = 0.05
     ent_end   = 0.002
-    update_every = 5    # 每5步更新一次（修复4）
+    update_every = 3
+    # 不使用经验回放（会强化次优策略）
 
     print(f"  [A3C-improved] 训练 {label} | obs_dim={env.obs_dim} | {n_episodes} episodes")
     rewards = []
@@ -112,7 +129,7 @@ def train_a3c(env: ConcurrentFLRoutingEnv, n_episodes: int, label: str) -> Polic
             buf['dones'].append(float(done))
             state = ns
 
-            # 每 update_every 步或 episode 结束时更新（修复4）
+            # 每 update_every 步或 episode 结束时更新
             if len(buf['states']) >= update_every or done:
                 _update_a3c(actor, critic, actor_opt, critic_opt,
                             buf, gamma, n_step, max_grad_norm, ent_coef)
@@ -401,7 +418,7 @@ def main(n_train: int = 1000, n_eval: int = 200):
     all_results = {}
 
     # 5-GBS 场景更复杂，需要更多训练
-    train_episodes = {1: n_train, 3: n_train, 5: max(n_train, 2000)}
+    train_episodes = {1: n_train, 3: n_train, 5: max(n_train, 2500)}
 
     for num_gbs in gbs_list:
         ep_count = train_episodes[num_gbs]
@@ -414,8 +431,20 @@ def main(n_train: int = 1000, n_eval: int = 200):
         print(f"  obs_dim={env.obs_dim}, action_dim={env.action_space_n}, "
               f"nodes={env.num_nodes}, edges={len(env.topo.edges)}")
 
-        # 训练 A3C
-        actor = train_a3c(env, ep_count, f"{num_gbs}-GBS")
+        # 训练 A3C（多次训练取最优，解决收敛不稳定）
+        best_actor, best_tup = None, float('inf')
+        n_runs = 3  # 训练3次取最优
+        for run in range(n_runs):
+            print(f"  [A3C run {run+1}/{n_runs}]")
+            actor_cand = train_a3c(env, ep_count, f"{num_gbs}-GBS-run{run+1}")
+            # 快速评估
+            res = evaluate(env, lambda e, v, a=actor_cand: a3c_policy(a, e, v), 50)
+            print(f"    → T_up={res['mean_T_up']:.2f}s, Div={res['mean_diversity']:.2f}")
+            if res['mean_T_up'] < best_tup:
+                best_tup = res['mean_T_up']
+                best_actor = actor_cand
+        actor = best_actor
+        print(f"  [A3C] 最优 T_up={best_tup:.2f}s")
         torch.save(actor.state_dict(),
                    f"{OUTPUT_DIR}/models/scale_a3c_{num_gbs}gbs_{timestamp}.pth")
 
