@@ -245,8 +245,8 @@ class FLRoutingEnv:
         }
 
     def _distribution_cost(self, node: int) -> float:
-        successors = self.topo.successors(node)
-        if not successors:
+        successors = [n for n in self.topo.successors(node) if n in self.topo.node_load]
+        if not successors or node not in self.topo.node_load:
             return 0.0
         avg = sum(self.topo.node_load_ratio(n) for n in successors) / len(successors)
         return (2 / math.pi) * math.atan(self.topo.node_load_ratio(node) - avg)

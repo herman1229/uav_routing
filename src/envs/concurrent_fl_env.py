@@ -333,10 +333,12 @@ class ConcurrentFLRoutingEnv:
         return self.beta_tup * math.exp(-2.0 * norm)
 
     def _distribution_cost(self, node: int) -> float:
-        succs = self.topo.successors(node)
+        succs = [n for n in self.topo.successors(node) if n in self.topo.node_load]
         if not succs:
             return 0.0
         avg = sum(self.topo.node_load_ratio(n) for n in succs) / len(succs)
+        if node not in self.topo.node_load:
+            return 0.0
         return (2 / math.pi) * math.atan(self.topo.node_load_ratio(node) - avg)
 
     def _advance_time(self, elapsed: float):

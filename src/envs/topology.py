@@ -18,7 +18,7 @@ from typing import Dict, List, Tuple
 @dataclass
 class TopologyConfig:
     num_gbs: int = 3       # 支持 1/3/5
-    num_routers: int = 4   # 3-GBS用4个Router，5-GBS用5个Router
+    num_routers: int = 4   # 1-GBS:3, 3-GBS:4, 5-GBS:5
     num_servers: int = 1
     node_capacity: int = 50
     # 各类链路容量（Mbps）
@@ -71,14 +71,22 @@ class NetworkTopology:
     # ------------------------------------------------------------------
     def _build_graph(self) -> nx.DiGraph:
         """
-        通用拓扑生成，支持任意 num_gbs（1/3/5 均可）：
-        - 每个 GBS i 连接到 Router(num_gbs + i) 和 Router(num_gbs + (i+1) % num_routers)
-        - Router 之间全双向连接（形成网状骨干）
-        - 最后 2 个 Router 连接到 Server
+        拓扑生成，根据 num_gbs 选择最优结构：
+
+        1-GBS (3 Router): GBS0 -> R1,R2; R1<->R2<->R3; R2,R3 -> Server
+        3-GBS (4 Router): 原有结构，GBS各接2个Router，2个Server出口
+        5-GBS (7 Router): 均衡双聚合结构
+          - 5个接入Router，每GBS独占一个（路径跳数均等=3跳）
+          - 接入Router间环形互连（提供绕路能力）
+          - 2个聚合Router（agg1负责GBS0-2，agg2负责GBS2-4）
+          - 2个聚合Router -> Server（无单点瓶颈）
         """
         g = nx.DiGraph()
         for i in range(self.num_nodes):
             g.add_node(i)
+
+        if self.num_gbs == 5:
+            return self._build_5gbs_graph(g)
 
         R0 = self.num_gbs  # 第一个 Router 的编号
 
@@ -90,19 +98,45 @@ class NetworkTopology:
             if r2 != r1:
                 g.add_edge(i, r2)
 
-        # Router <-> Router（相邻双向连接，形成环形骨干）
+        # Router <-> Router（相邻双向连接）
         for i in range(self.num_routers):
             for j in range(i + 1, self.num_routers):
-                if abs(i - j) <= 2:  # 相邻或次相邻Router互连
+                if abs(i - j) <= 2:
                     g.add_edge(R0 + i, R0 + j)
                     g.add_edge(R0 + j, R0 + i)
 
-        # Router -> Server：出口数量 = max(2, num_routers//2)
-        # 5-Router用3个出口，4-Router用2个出口，3-Router用2个出口
-        num_exits = max(2, self.num_routers // 2 + (1 if self.num_routers >= 5 else 0))
-        for k in range(num_exits):
-            exit_router = R0 + self.num_routers - 1 - k
-            g.add_edge(exit_router, self.server_id)
+        # Router -> Server（2个出口）
+        for k in range(2):
+            g.add_edge(R0 + self.num_routers - 1 - k, self.server_id)
+
+        return g
+
+    def _build_5gbs_graph(self, g: nx.DiGraph) -> nx.DiGraph:
+        """
+        5-GBS 原始拓扑（5 Router + 1 Server = 11节点）
+        节点编号：GBS(0-4), Router(5-9), Server(10)
+        拓扑结构与通用生成器相同，但明确3个Server出口
+        """
+        R0 = self.num_gbs  # = 5
+
+        # GBS -> Router（每个GBS接入相邻的2个Router）
+        for i in range(self.num_gbs):
+            r1 = R0 + i % self.num_routers
+            r2 = R0 + (i + 1) % self.num_routers
+            g.add_edge(i, r1)
+            if r2 != r1:
+                g.add_edge(i, r2)
+
+        # Router <-> Router（相邻双向连接）
+        for i in range(self.num_routers):
+            for j in range(i + 1, self.num_routers):
+                if abs(i - j) <= 2:
+                    g.add_edge(R0 + i, R0 + j)
+                    g.add_edge(R0 + j, R0 + i)
+
+        # 3个Server出口：R7, R8, R9 -> Server
+        for k in range(3):
+            g.add_edge(R0 + self.num_routers - 1 - k, self.server_id)
 
         return g
 

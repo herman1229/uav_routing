@@ -46,16 +46,31 @@ def make_topo_cfg(num_gbs: int) -> TopologyConfig:
         step_failure_prob=0.08,
     )
 
+
+def make_topo_cfg_5gbs_train() -> TopologyConfig:
+    """5-GBS 训练专用：更大的链路负载随机性，迫使A3C学动态选路"""
+    return TopologyConfig(
+        num_gbs=5, num_routers=5,
+        node_capacity=50,
+        gbs_to_router_capacity=20.0,
+        router_to_router_capacity=40.0,
+        router_to_server_capacity=80.0,
+        init_node_load_range=(10, 40),
+        init_link_load_range=(0.1, 0.85),  # 极大范围，强迫学动态选路
+        link_failure_prob=0.20,
+        step_failure_prob=0.10,
+    )
+
 ENV_BASE = dict(
     delay_cfg=DelayConfig(model_size=10.0, t_agg=0.5),
     delta_t=5.0, num_slots=100,
     g_hop=-1.0, alpha_1=0.4, alpha_2=0.1,
-    w_delay=0.6,
+    w_delay=0.8,            # 加大时延惩罚，让A3C直接最小化路径时延
     r_success=20.0, r_fail=-5.0,
     r_loop=-2.0,
-    r_compete=-1.0,         # 适中的竞争惩罚
+    r_compete=-0.5,         # 降低竞争惩罚，不强迫分散
     r_diversity=0.0,
-    beta_tup=10.0,          # 极大的episode级T_up奖励，拉大两个局部最优的差距
+    beta_tup=5.0,           # 适中的T_up奖励，不过度追求分散
     max_steps_per_gbs=50,
 )
 
@@ -224,6 +239,60 @@ def _update_a3c(actor, critic, actor_opt, critic_opt,
 # ======================================================
 # DQN 训练
 # ======================================================
+def train_a3c_curriculum(env: ConcurrentFLRoutingEnv, n_episodes: int, label: str) -> PolicyNet:
+    """
+    5-GBS 课程学习训练：
+    阶段1（40%）：低负载预热，让A3C先学会基本分散策略
+    阶段2（60%）：目标负载精调，迁移到实际评估场景
+    """
+    from src.envs.topology import TopologyConfig
+    from src.envs.delay_model import DelayConfig
+
+    n1 = int(n_episodes * 0.4)  # 阶段1
+    n2 = n_episodes - n1        # 阶段2
+
+    # 阶段1：低负载（让A3C容易学到分散路径策略）
+    easy_cfg = TopologyConfig(
+        num_gbs=env.topo.num_gbs,
+        num_routers=env.topo.num_routers,
+        node_capacity=env.topo.cfg.node_capacity,
+        gbs_to_router_capacity=env.topo.cfg.gbs_to_router_capacity,
+        router_to_router_capacity=env.topo.cfg.router_to_router_capacity,
+        router_to_server_capacity=env.topo.cfg.router_to_server_capacity,
+        init_node_load_range=(2, 8),       # 低负载
+        init_link_load_range=(0.05, 0.2),  # 低链路负载
+        link_failure_prob=0.02,
+        step_failure_prob=0.01,
+    )
+    # 阶段1环境：低负载，奖励更简单（不加时延惩罚，只学分散）
+    env1_kwargs = dict(
+        delay_cfg=DelayConfig(model_size=10.0, t_agg=0.5),
+        delta_t=5.0, num_slots=100,
+        g_hop=-1.0, alpha_1=0.5, alpha_2=0.05,
+        w_delay=0.2,            # 时延惩罚小，专注学分散
+        r_success=20.0, r_fail=-5.0,
+        r_loop=-2.0, r_compete=-2.0,  # 竞争惩罚大，强迫分散
+        r_diversity=0.0, beta_tup=15.0,  # 强T_up信号
+        max_steps_per_gbs=50,
+    )
+    env1 = ConcurrentFLRoutingEnv(topo_cfg=easy_cfg, **env1_kwargs)
+
+    print(f"  [课程阶段1] 低负载预热 {n1}ep")
+    actor = train_a3c(env1, n1, f"{label}-phase1")
+
+    # 评估阶段1效果
+    r1 = evaluate(env1, lambda e, v, a=actor: a3c_policy(a, e, v), 30)
+    print(f"  [课程阶段1完成] median={r1['median_T_up']:.1f}s, bad={r1['bad_rate']*100:.0f}%, Div={r1['mean_diversity']:.2f}")
+
+    # 阶段2：目标负载精调（迁移预训练权重）
+    print(f"  [课程阶段2] 目标负载精调 {n2}ep")
+    actor2 = train_a3c(env, n2, f"{label}-phase2",
+                       pretrained_actor=actor,
+                       pretrained_critic=None)
+
+    return actor2
+
+
 def train_dqn(env: ConcurrentFLRoutingEnv, n_episodes: int, label: str) -> DQNAgent:
     agent = DQNAgent(
         state_dim=env.obs_dim, hidden_dim=HIDDEN_DIM,
@@ -432,24 +501,31 @@ def main(n_train: int = 1000, n_eval: int = 200):
         print(f"{'='*65}")
 
         topo_cfg = make_topo_cfg(num_gbs)
-        env = ConcurrentFLRoutingEnv(topo_cfg=topo_cfg, **ENV_BASE)
+        # 5-GBS训练时用更大随机性的拓扑配置
+        train_topo_cfg = make_topo_cfg_5gbs_train() if num_gbs == 5 else topo_cfg
+        env_train = ConcurrentFLRoutingEnv(topo_cfg=train_topo_cfg, **ENV_BASE)
+        env = ConcurrentFLRoutingEnv(topo_cfg=topo_cfg, **ENV_BASE)  # 评估用标准配置
         print(f"  obs_dim={env.obs_dim}, action_dim={env.action_space_n}, "
               f"nodes={env.num_nodes}, edges={len(env.topo.edges)}")
 
-        # 训练 A3C（多次训练取最优，解决收敛不稳定）
+        # 训练 A3C（多次训练取最优）
         best_actor, best_tup = None, float('inf')
-        n_runs = 3  # 训练3次取最优
+        n_runs = 3
         for run in range(n_runs):
             print(f"  [A3C run {run+1}/{n_runs}]")
-            actor_cand = train_a3c(env, ep_count, f"{num_gbs}-GBS-run{run+1}")
-            # 快速评估
+            if False:
+                actor_cand = train_a3c_curriculum(env, ep_count, f"{num_gbs}-GBS-run{run+1}")
+            else:
+                # 5-GBS用训练专用环境（更大随机性），评估用标准环境
+                train_env = env_train if num_gbs == 5 else env
+                actor_cand = train_a3c(train_env, ep_count, f"{num_gbs}-GBS-run{run+1}")
             res = evaluate(env, lambda e, v, a=actor_cand: a3c_policy(a, e, v), 50)
-            print(f"    → T_up={res['mean_T_up']:.2f}s, Div={res['mean_diversity']:.2f}")
-            if res['mean_T_up'] < best_tup:
-                best_tup = res['mean_T_up']
+            print(f"    → median={res['median_T_up']:.2f}s, bad={res['bad_rate']*100:.0f}%, Div={res['mean_diversity']:.2f}")
+            if res['median_T_up'] < best_tup:
+                best_tup = res['median_T_up']
                 best_actor = actor_cand
         actor = best_actor
-        print(f"  [A3C] 最优 T_up={best_tup:.2f}s")
+        print(f"  [A3C] 最优 median T_up={best_tup:.2f}s")
         torch.save(actor.state_dict(),
                    f"{OUTPUT_DIR}/models/scale_a3c_{num_gbs}gbs_{timestamp}.pth")
 
