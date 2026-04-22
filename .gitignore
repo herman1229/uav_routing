@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+*.pyo
+outputs/logs/
+outputs/models/
+*.npy
+*.pth
+.DS_Store

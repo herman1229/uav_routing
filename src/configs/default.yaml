@@ -1,0 +1,47 @@
+# ======================================================
+# 实验全局配置
+# ======================================================
+
+network:
+  num_gbs: 3           # 地面基站数量
+  num_routers: 4       # 路由器数量
+  num_servers: 1       # 聚合服务器数量
+  node_capacity: 50    # 节点流表容量（条）
+  link_capacity: 100.0 # 链路带宽上限 (Mbps)
+  init_node_load_range: [5, 15]    # 初始节点负载范围（条）
+  init_link_load_range: [0.2, 0.4] # 初始链路负载率范围
+
+fl:
+  model_size: 10.0     # FL 模型参数大小 (Mb)
+  packet_size: 1.0     # 数据包大小 (Mb)
+  hop_delay: 0.001     # 每跳固定处理时延 (s)
+  t_agg: 0.5           # 服务器聚合固定时延 (s)
+
+timeslot:
+  delta_t: 5.0         # 时隙长度 (s)
+  num_slots: 100       # 总时隙数
+  bandwidth_change_std: 5.0  # 时隙切换时带宽变化标准差 (Mbps)
+  load_change_std: 2.0       # 时隙切换时负载变化标准差
+
+reward:
+  g_hop: -1.0          # 每跳惩罚
+  alpha_1: 0.4         # 负载奖励权重
+  alpha_2: 0.1         # 负载均衡惩罚权重
+  w_delay: 0.5         # 时延奖励权重
+  r_success: 10.0      # 到达目标奖励
+  r_fail: -10.0        # 失败惩罚
+
+agent:
+  hidden_dim: 256
+  actor_lr: 0.001
+  critic_lr: 0.001
+  gamma: 0.98
+  num_workers: 8
+  max_episodes: 2000
+  max_steps_per_gbs: 30  # 每个GBS最大步数
+
+train:
+  seed: 42
+  log_interval: 50     # 每N个episode打印一次
+  save_interval: 500   # 每N个episode保存一次模型
+  output_dir: "outputs"
