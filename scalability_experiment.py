@@ -314,9 +314,14 @@ def evaluate(env, policy_fn, n_eval, seed_offset=1000):
         tups.append(r["T_up"] if r["T_up"] != float('inf') else 999.0)
         succs.append(r["success_count"] / env.num_gbs)
         divs.append(r["path_diversity"])
+    valid_tups = [t for t in tups if t < 900]
+    arr = np.array(valid_tups) if valid_tups else np.array([999.0])
     return {
-        "mean_T_up": float(np.mean([t for t in tups if t < 900]) or 999.0),
-        "std_T_up":  float(np.std([t for t in tups if t < 900]) or 0.0),
+        "mean_T_up":   float(np.mean(arr)),
+        "median_T_up": float(np.median(arr)),
+        "std_T_up":    float(np.std(arr)),
+        "p90_T_up":    float(np.percentile(arr, 90)),   # 90th percentile
+        "bad_rate":    float(np.mean(arr > 50)),         # 坏场景率：T_up>50s的比例
         "success_rate": float(np.mean(succs)),
         "mean_diversity": float(np.mean(divs)),
         "tups": tups,
@@ -341,47 +346,47 @@ def plot_scalability(results: dict, save_dir: str):
         "LAD": "^", "DQN": "D", "A3C (Ours)": "o",
     }
 
-    # 图1：T_up vs GBS数量（折线图，核心结论图）
-    fig, ax = plt.subplots(figsize=(8, 5))
-    for alg in algorithms:
-        means = [results[n][alg]["mean_T_up"] for n in gbs_counts]
-        stds  = [results[n][alg]["std_T_up"]  for n in gbs_counts]
-        ax.errorbar(gbs_counts, means, yerr=stds,
-                    label=alg, color=colors.get(alg, "#888"),
-                    marker=markers.get(alg, "o"),
-                    linewidth=2, markersize=8, capsize=4)
-    ax.set_xlabel("Number of GBS (UAVs)", fontsize=12)
-    ax.set_ylabel("Upload Delay T_up (s)", fontsize=12)
-    ax.set_title("T_up vs Number of GBS: A3C Advantage Grows with Scale",
-                 fontsize=12, fontweight='bold')
-    ax.set_xticks(gbs_counts)
-    ax.legend(fontsize=10)
-    ax.grid(True, alpha=0.3)
+    # 图1a：T_up 均值 vs GBS数量
+    fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+    for ax, metric, title in zip(axes,
+        ["mean_T_up", "median_T_up"],
+        ["Mean T_up (s) — affected by outliers",
+         "Median T_up (s) — typical performance"]):
+        for alg in algorithms:
+            vals = [results[n][alg][metric] for n in gbs_counts]
+            stds = [results[n][alg]["std_T_up"] for n in gbs_counts]
+            if metric == "mean_T_up":
+                ax.errorbar(gbs_counts, vals, yerr=stds,
+                            label=alg, color=colors.get(alg, "#888"),
+                            marker=markers.get(alg, "o"), linewidth=2, markersize=8, capsize=4)
+            else:
+                ax.plot(gbs_counts, vals, label=alg, color=colors.get(alg, "#888"),
+                        marker=markers.get(alg, "o"), linewidth=2, markersize=8)
+        ax.set_xlabel("Number of GBS (UAVs)", fontsize=11)
+        ax.set_ylabel("T_up (s)", fontsize=11)
+        ax.set_title(title, fontsize=11, fontweight='bold')
+        ax.set_xticks(gbs_counts)
+        ax.legend(fontsize=9)
+        ax.grid(True, alpha=0.3)
+    plt.suptitle("Upload Delay T_up: Mean vs Median Comparison", fontsize=13, fontweight='bold')
     plt.tight_layout()
     p = f"{save_dir}/scalability_tup.png"
     plt.savefig(p, dpi=150); plt.close(); print(f"  saved: {p}")
 
-    # 图2：A3C vs LAD 相对提升随GBS数量的变化
-    fig, ax = plt.subplots(figsize=(7, 4))
-    improvements = []
-    for n in gbs_counts:
-        a3c_t = results[n]["A3C (Ours)"]["mean_T_up"]
-        lad_t = results[n]["LAD"]["mean_T_up"]
-        impr = (lad_t - a3c_t) / lad_t * 100 if lad_t > 0 else 0
-        improvements.append(impr)
-    bars = ax.bar(gbs_counts, improvements,
-                  color=["#e63946" if i >= 0 else "#aaa" for i in improvements],
-                  alpha=0.85, width=0.6)
-    for bar, val in zip(bars, improvements):
-        ax.text(bar.get_x() + bar.get_width()/2,
-                bar.get_height() + 0.5 if val >= 0 else bar.get_height() - 2,
-                f'{val:+.1f}%', ha='center', fontsize=11, fontweight='bold')
-    ax.axhline(0, color='black', linewidth=0.8)
-    ax.set_xlabel("Number of GBS (UAVs)", fontsize=12)
-    ax.set_ylabel("A3C Improvement over LAD (%)", fontsize=12)
-    ax.set_title("A3C Improvement vs LAD Grows with Number of UAVs",
-                 fontsize=12, fontweight='bold')
-    ax.set_xticks(gbs_counts)
+    # 图2：坏场景率对比（A3C的稳健性优势）
+    fig, ax = plt.subplots(figsize=(8, 4))
+    x = np.arange(len(gbs_counts))
+    w = 0.18
+    for i, alg in enumerate(algorithms):
+        bad_rates = [results[n][alg]["bad_rate"] * 100 for n in gbs_counts]
+        ax.bar(x + i*w, bad_rates, w, label=alg,
+               color=colors.get(alg, "#888"), alpha=0.85)
+    ax.set_xticks(x + w*(len(algorithms)-1)/2)
+    ax.set_xticklabels([f"{n} GBS" for n in gbs_counts])
+    ax.set_ylabel("Bad Scenario Rate (T_up > 50s)", fontsize=11)
+    ax.set_title("Robustness: A3C has Fewer Bad Scenarios (T_up > 50s)",
+                 fontsize=11, fontweight='bold')
+    ax.legend(fontsize=9)
     ax.grid(axis='y', alpha=0.3)
     plt.tight_layout()
     p = f"{save_dir}/scalability_improvement.png"
@@ -463,8 +468,12 @@ def main(n_train: int = 1000, n_eval: int = 200):
         sc_res["A3C (Ours)"]   = evaluate(env, lambda e, v: a3c_policy(actor, e, v), n_eval)
 
         for alg, res in sc_res.items():
-            print(f"  {alg:16s} | T_up={res['mean_T_up']:8.3f}±{res['std_T_up']:.2f}s "
-                  f"| Succ={res['success_rate']:.3f} | Div={res['mean_diversity']:.2f}")
+            print(f"  {alg:16s} | mean={res['mean_T_up']:7.1f}s "
+                  f"median={res['median_T_up']:6.1f}s "
+                  f"std={res['std_T_up']:5.1f}s "
+                  f"p90={res['p90_T_up']:7.1f}s "
+                  f"bad={res['bad_rate']*100:.0f}% "
+                  f"Div={res['mean_diversity']:.2f}")
 
         all_results[num_gbs] = sc_res
 
@@ -477,11 +486,11 @@ def main(n_train: int = 1000, n_eval: int = 200):
     with open(out, "w") as f:
         json.dump(all_results, f, indent=2)
 
-    # 打印汇总表
-    print("\n" + "="*70)
-    print("扩展性实验汇总：T_up 均值 (s) — 中负载场景")
+    # 打印汇总表（均值）
+    print("\n" + "="*75)
+    print("汇总①：T_up 均值 (s) — 受极端值影响大")
     print(f"{'GBS':>5} | {'A3C':>8} | {'DQN':>8} | {'LAD':>8} | {'SP':>8} | {'A3C vs LAD':>12} | {'A3C vs DQN':>12}")
-    print("-"*70)
+    print("-"*75)
     for n in gbs_list:
         a = all_results[n]["A3C (Ours)"]["mean_T_up"]
         d = all_results[n]["DQN"]["mean_T_up"]
@@ -489,8 +498,34 @@ def main(n_train: int = 1000, n_eval: int = 200):
         s = all_results[n]["ShortestPath"]["mean_T_up"]
         vs_lad = (l - a) / l * 100 if l > 0 else 0
         vs_dqn = (d - a) / d * 100 if d > 0 else 0
-        print(f"{n:>5} | {a:>8.3f} | {d:>8.3f} | {l:>8.3f} | {s:>8.3f} | {vs_lad:>+11.1f}% | {vs_dqn:>+11.1f}%")
-    print("="*70)
+        print(f"{n:>5} | {a:>8.2f} | {d:>8.2f} | {l:>8.2f} | {s:>8.2f} | {vs_lad:>+11.1f}% | {vs_dqn:>+11.1f}%")
+
+    # 打印汇总表（中位数）
+    print("\n" + "="*75)
+    print("汇总②：T_up 中位数 (s) — 更能反映典型性能")
+    print(f"{'GBS':>5} | {'A3C':>8} | {'DQN':>8} | {'LAD':>8} | {'SP':>8} | {'A3C vs LAD':>12} | {'A3C vs DQN':>12}")
+    print("-"*75)
+    for n in gbs_list:
+        a = all_results[n]["A3C (Ours)"]["median_T_up"]
+        d = all_results[n]["DQN"]["median_T_up"]
+        l = all_results[n]["LAD"]["median_T_up"]
+        s = all_results[n]["ShortestPath"]["median_T_up"]
+        vs_lad = (l - a) / l * 100 if l > 0 else 0
+        vs_dqn = (d - a) / d * 100 if d > 0 else 0
+        print(f"{n:>5} | {a:>8.2f} | {d:>8.2f} | {l:>8.2f} | {s:>8.2f} | {vs_lad:>+11.1f}% | {vs_dqn:>+11.1f}%")
+
+    # 打印鲁棒性汇总（坏场景率）
+    print("\n" + "="*75)
+    print("汇总③：坏场景率 (T_up>50s 的比例) — A3C的稳健性优势")
+    print(f"{'GBS':>5} | {'A3C':>8} | {'DQN':>8} | {'LAD':>8} | {'SP':>8}")
+    print("-"*50)
+    for n in gbs_list:
+        a = all_results[n]["A3C (Ours)"]["bad_rate"]
+        d = all_results[n]["DQN"]["bad_rate"]
+        l = all_results[n]["LAD"]["bad_rate"]
+        s = all_results[n]["ShortestPath"]["bad_rate"]
+        print(f"{n:>5} | {a*100:>7.1f}% | {d*100:>7.1f}% | {l*100:>7.1f}% | {s*100:>7.1f}%")
+    print("="*75)
     print(f"\n结果保存至: {out}")
 
 
