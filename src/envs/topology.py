@@ -17,8 +17,8 @@ from typing import Dict, List, Tuple
 
 @dataclass
 class TopologyConfig:
-    num_gbs: int = 3
-    num_routers: int = 4
+    num_gbs: int = 3       # 支持 1/3/5
+    num_routers: int = 4   # 3-GBS用4个Router，5-GBS用5个Router
     num_servers: int = 1
     node_capacity: int = 50
     # 各类链路容量（Mbps）
@@ -70,22 +70,37 @@ class NetworkTopology:
 
     # ------------------------------------------------------------------
     def _build_graph(self) -> nx.DiGraph:
+        """
+        通用拓扑生成，支持任意 num_gbs（1/3/5 均可）：
+        - 每个 GBS i 连接到 Router(num_gbs + i) 和 Router(num_gbs + (i+1) % num_routers)
+        - Router 之间全双向连接（形成网状骨干）
+        - 最后 2 个 Router 连接到 Server
+        """
         g = nx.DiGraph()
         for i in range(self.num_nodes):
             g.add_node(i)
-        connections = [
-            (0, 3), (0, 4),
-            (1, 4), (1, 5),
-            (2, 5), (2, 6),
-            (3, 4), (4, 3),
-            (3, 5), (5, 3),
-            (4, 5), (5, 4),
-            (4, 6), (6, 4),
-            (5, 6), (6, 5),
-            (5, 7), (6, 7),
-        ]
-        for u, v in connections:
-            g.add_edge(u, v)
+
+        R0 = self.num_gbs  # 第一个 Router 的编号
+
+        # GBS -> Router（每个GBS接入相邻的2个Router）
+        for i in range(self.num_gbs):
+            r1 = R0 + i % self.num_routers
+            r2 = R0 + (i + 1) % self.num_routers
+            g.add_edge(i, r1)
+            if r2 != r1:
+                g.add_edge(i, r2)
+
+        # Router <-> Router（相邻双向连接，形成环形骨干）
+        for i in range(self.num_routers):
+            for j in range(i + 1, self.num_routers):
+                if abs(i - j) <= 2:  # 相邻或次相邻Router互连
+                    g.add_edge(R0 + i, R0 + j)
+                    g.add_edge(R0 + j, R0 + i)
+
+        # 最后2个Router -> Server
+        g.add_edge(R0 + self.num_routers - 2, self.server_id)
+        g.add_edge(R0 + self.num_routers - 1, self.server_id)
+
         return g
 
     def _init_link_capacities(self) -> Dict[Tuple, float]:
