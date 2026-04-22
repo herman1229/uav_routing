@@ -62,7 +62,7 @@ ENV_BASE = dict(
     delta_t=5.0, num_slots=100,
     g_hop=-1.0, alpha_1=0.4, alpha_2=0.1,
     w_delay=0.5, r_success=20.0, r_fail=-5.0,
-    r_loop=-2.0, r_compete=-1.5, r_diversity=0.3, beta_tup=3.0,
+    r_loop=-2.0, r_compete=-1.5, r_diversity=0.0, beta_tup=5.0, w_delay=0.8,
     max_steps_per_gbs=50,
 )
 
