@@ -57,69 +57,73 @@ ENV_BASE = dict(
 
 
 # ======================================================
-# A3C 训练
+# 改进A3C 训练（修复5个实现缺陷）
+# 修复1: n-step TD 替代 Monte Carlo 回报（降低方差）
+# 修复2: 梯度裁剪（防止梯度爆炸）
+# 修复3: 熵系数退火（早期探索，后期收敛）
+# 修复4: 每N步更新一次（提高更新频率，对齐DQN）
+# 修复5: Advantage 归一化（稳定训练）
 # ======================================================
 def train_a3c(env: ConcurrentFLRoutingEnv, n_episodes: int, label: str) -> PolicyNet:
     actor = PolicyNet(env.obs_dim, HIDDEN_DIM, env.action_space_n)
     critic = ValueNet(env.obs_dim, HIDDEN_DIM)
-    actor_opt = torch.optim.Adam(actor.parameters(), lr=1e-3)
+    actor_opt = torch.optim.Adam(actor.parameters(), lr=5e-4)   # 略低lr更稳定
     critic_opt = torch.optim.Adam(critic.parameters(), lr=1e-3)
     gamma = 0.98
+    n_step = 5          # n-step TD（修复1）
+    max_grad_norm = 0.5 # 梯度裁剪（修复2）
+    # 熵退火：前70%保持较高熵鼓励探索，后30%快速收敛（修复3）
+    ent_start = 0.05
+    ent_end   = 0.002
+    update_every = 5    # 每5步更新一次（修复4）
 
-    print(f"  [A3C] 训练 {label} | obs_dim={env.obs_dim} | {n_episodes} episodes")
+    print(f"  [A3C-improved] 训练 {label} | obs_dim={env.obs_dim} | {n_episodes} episodes")
     rewards = []
+    global_step = 0
+
     for ep in range(1, n_episodes + 1):
-        state = env.reset(seed=None)  # 随机种子，增加探索多样性
-        trans = {'states': [], 'actions': [], 'rewards': [], 'valid_sets': []}
+        # 熵系数退火：前70%缓慢降低，后30%快速收敛（修复3）
+        progress = ep / n_episodes
+        if progress < 0.7:
+            ent_coef = ent_start - (ent_start - ent_end) * (progress / 0.7) * 0.5
+        else:
+            ent_coef = ent_start * 0.5 * (1 - (progress - 0.7) / 0.3) + ent_end
+
+        state = env.reset(seed=None)
+        buf = {'states': [], 'actions': [], 'rewards': [], 'valid_sets': [], 'next_states': [], 'dones': []}
         done = False
+
         while not done:
             valid = env.get_valid_actions()
             if not valid: break
-            s = torch.FloatTensor(state)
-            logits = actor(s)
-            vl = logits[valid]
-            dist = torch.distributions.Categorical(logits=vl)
-            idx = dist.sample().item()
-            action = valid[idx]
+            with torch.no_grad():
+                logits = actor(torch.FloatTensor(state))
+                dist = torch.distributions.Categorical(logits=logits[valid])
+                idx = dist.sample().item()
+                action = valid[idx]
             ns, r, done, _, _ = env.step(action)
-            trans['states'].append(state)
-            trans['actions'].append(action)
-            trans['rewards'].append(r)
-            trans['valid_sets'].append(valid)
+            global_step += 1
+
+            buf['states'].append(state)
+            buf['actions'].append(action)
+            buf['rewards'].append(r)
+            buf['valid_sets'].append(valid)
+            buf['next_states'].append(ns)
+            buf['dones'].append(float(done))
             state = ns
 
-        # 更新
-        if trans['states']:
-            states = torch.FloatTensor(np.array(trans['states']))
-            rew = torch.FloatTensor(trans['rewards'])
-            R, returns = 0.0, []
-            for r in reversed(rew.tolist()):
-                R = r + gamma * R
-                returns.insert(0, R)
-            returns = torch.FloatTensor(returns).view(-1, 1)
-            values = critic(states)
-            adv = (returns - values).detach()
-            critic_loss = F.mse_loss(values, returns.detach())
-            al, ents = [], []
-            logits_all = actor(states)
-            for i, (valid, action) in enumerate(zip(trans['valid_sets'], trans['actions'])):
-                if not valid: continue
-                vl = logits_all[i][valid]
-                dist = torch.distributions.Categorical(logits=vl)
-                li = valid.index(action)
-                al.append(-dist.log_prob(torch.tensor(li)) * adv[i])
-                ents.append(dist.entropy())
-            if al:
-                aloss = torch.stack(al).mean() - 0.01 * torch.stack(ents).mean()  # 更大熵系数
-                critic_opt.zero_grad(); critic_loss.backward(); critic_opt.step()
-                actor_opt.zero_grad(); aloss.backward(); actor_opt.step()
+            # 每 update_every 步或 episode 结束时更新（修复4）
+            if len(buf['states']) >= update_every or done:
+                _update_a3c(actor, critic, actor_opt, critic_opt,
+                            buf, gamma, n_step, max_grad_norm, ent_coef)
+                buf = {'states': [], 'actions': [], 'rewards': [],
+                       'valid_sets': [], 'next_states': [], 'dones': []}
 
         res = env.get_episode_result()
         rewards.append(res["total_reward"])
 
         if ep % 200 == 0:
             r50 = np.mean(rewards[-50:])
-            # 快速评估当前策略的多样性
             env_eval = ConcurrentFLRoutingEnv(topo_cfg=env.topo.cfg, **ENV_BASE)
             div_list = []
             actor.eval()
@@ -133,10 +137,71 @@ def train_a3c(env: ConcurrentFLRoutingEnv, n_episodes: int, label: str) -> Polic
                     _, _, d, _, _ = env_eval.step(a)
                 div_list.append(env_eval.get_episode_result()["path_diversity"])
             actor.train()
-            print(f"    Ep {ep:4d} | AvgR(50)={r50:.2f} | Div={np.mean(div_list):.2f}")
+            print(f"    Ep {ep:4d} | AvgR(50)={r50:.2f} | Div={np.mean(div_list):.2f} | ent={ent_coef:.4f}")
 
     actor.eval()
     return actor
+
+
+def _update_a3c(actor, critic, actor_opt, critic_opt,
+                buf, gamma, n_step, max_grad_norm, ent_coef):
+    """A3C 参数更新：n-step TD + 梯度裁剪 + Advantage归一化"""
+    if not buf['states']:
+        return
+
+    states     = torch.FloatTensor(np.array(buf['states']))
+    next_states = torch.FloatTensor(np.array(buf['next_states']))
+    rewards    = buf['rewards']
+    dones      = buf['dones']
+    T = len(rewards)
+
+    # n-step TD 回报估计（修复1：比 MC 方差小）
+    with torch.no_grad():
+        next_values = critic(next_states).squeeze(1)
+    returns = []
+    for t in range(T):
+        G = 0.0
+        for k in range(min(n_step, T - t)):
+            G += (gamma ** k) * rewards[t + k]
+            if dones[t + k]:
+                break
+        else:
+            # bootstrap：加上 n-step 后的 V(s)
+            if t + n_step < T:
+                G += (gamma ** n_step) * next_values[t + n_step].item()
+        returns.append(G)
+    returns = torch.FloatTensor(returns).view(-1, 1)
+
+    # Advantage 归一化（修复5：稳定训练）
+    values = critic(states)
+    adv = (returns - values).detach()
+    if adv.std() > 1e-6:
+        adv = (adv - adv.mean()) / (adv.std() + 1e-8)
+
+    # Critic 更新
+    critic_loss = F.mse_loss(values, returns.detach())
+    critic_opt.zero_grad()
+    critic_loss.backward()
+    torch.nn.utils.clip_grad_norm_(critic.parameters(), max_grad_norm)  # 修复2
+    critic_opt.step()
+
+    # Actor 更新
+    logits_all = actor(states)
+    al, ents = [], []
+    for i, (valid, action) in enumerate(zip(buf['valid_sets'], buf['actions'])):
+        if not valid: continue
+        vl = logits_all[i][valid]
+        dist = torch.distributions.Categorical(logits=vl)
+        li = valid.index(action)
+        al.append(-dist.log_prob(torch.tensor(li)) * adv[i])
+        ents.append(dist.entropy())
+    if not al:
+        return
+    actor_loss = torch.stack(al).mean() - ent_coef * torch.stack(ents).mean()
+    actor_opt.zero_grad()
+    actor_loss.backward()
+    torch.nn.utils.clip_grad_norm_(actor.parameters(), max_grad_norm)  # 修复2
+    actor_opt.step()
 
 
 # ======================================================
