@@ -20,11 +20,17 @@ SEED = 42
 OUTPUT_DIR = "outputs"
 
 ENV_KWARGS = dict(
-    topo_cfg=TopologyConfig(node_capacity=50, link_capacity=100.0),
+    topo_cfg=TopologyConfig(
+        node_capacity=50,
+        gbs_to_router_capacity=20.0,
+        router_to_router_capacity=40.0,
+        router_to_server_capacity=80.0,
+    ),
     delay_cfg=DelayConfig(model_size=10.0, t_agg=0.5),
     delta_t=5.0, num_slots=100,
     g_hop=-1.0, alpha_1=0.4, alpha_2=0.1, w_delay=0.5,
-    r_success=10.0, r_fail=-10.0, max_steps_per_gbs=30,
+    r_success=20.0, r_fail=-5.0, r_loop=-2.0, beta_tup=2.0,
+    max_steps_per_gbs=50,
 )
 
 

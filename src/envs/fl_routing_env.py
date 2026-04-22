@@ -1,15 +1,15 @@
 """
-FL路由环境（重构版）
-- 引入时隙机制：真实时间随FL轮次累积，跨时隙更新网络状态
-- 显式计算FL时延 T_up / T_down / T_round
-- 奖励函数耦合时延目标
-- 动作mask在采样和log_prob中保持一致
-- 支持上传阶段（3 GBS依次决策）
+FL路由环境（v2 - 挑战性增强版）
+改进：
+- 不均匀链路容量（接入瓶颈）+ 链路随机失效
+- 环路检测与惩罚（visited集合）
+- Episode级T_up奖励（引导A3C直接优化FL时延）
+- 状态加入visited节点标记
 """
 import numpy as np
 import math
 import random
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Tuple, Optional, Set
 
 from .topology import NetworkTopology, TopologyConfig
 from .delay_model import DelayModel, DelayConfig
@@ -18,18 +18,20 @@ from .delay_model import DelayModel, DelayConfig
 class FLRoutingEnv:
     """
     Episode = 一轮FL通信（上传阶段）
-    3个GBS依次向Server路由，模拟多客户端上传模型参数
+    3个GBS依次向Server路由
 
     状态向量：
       [flow_id(1), current_node(1), server_id(1), model_size_norm(1),
-       time_slot_norm(1), node_load_features(8), link_load_features(18)]
-      共 5 + 8 + 18 = 31 维
+       time_slot_norm(1), node_load_features(8), link_load_features(18),
+       visited_flags(8)]
+      共 5 + 8 + 18 + 8 = 39 维
     """
 
     def __init__(self, topo_cfg: TopologyConfig = None, delay_cfg: DelayConfig = None,
                  delta_t: float = 5.0, num_slots: int = 100,
                  g_hop: float = -1.0, alpha_1: float = 0.4, alpha_2: float = 0.1,
                  w_delay: float = 0.5, r_success: float = 10.0, r_fail: float = -10.0,
+                 r_loop: float = -2.0, beta_tup: float = 1.0,
                  max_steps_per_gbs: int = 30):
 
         self.topo = NetworkTopology(topo_cfg)
@@ -39,7 +41,7 @@ class FLRoutingEnv:
         self.delta_t = delta_t
         self.num_slots = num_slots
         self.current_slot = 0
-        self.real_time = 0.0  # 真实累积时间 (s)
+        self.real_time = 0.0
 
         # 奖励参数
         self.g_hop = g_hop
@@ -48,6 +50,8 @@ class FLRoutingEnv:
         self.w_delay = w_delay
         self.r_success = r_success
         self.r_fail = r_fail
+        self.r_loop = r_loop         # 环路惩罚
+        self.beta_tup = beta_tup     # episode级T_up奖励权重
         self.max_steps_per_gbs = max_steps_per_gbs
 
         # 空间定义
@@ -56,9 +60,8 @@ class FLRoutingEnv:
         self.num_gbs = self.topo.num_gbs
         self.action_space_n = self.num_nodes
 
-        # obs_dim: flow_id + current_node + server_id + model_size_norm + slot_norm
-        #          + node_loads(8) + link_loads(18)
-        self.obs_dim = 5 + self.num_nodes + len(self.topo.edges)
+        # obs_dim: 5标量 + node_loads(8) + link_loads(18) + visited_flags(8)
+        self.obs_dim = 5 + self.num_nodes + len(self.topo.edges) + self.num_nodes
 
         # Episode 状态
         self.current_gbs = 0
@@ -69,6 +72,7 @@ class FLRoutingEnv:
         self.gbs_success: Dict[int, bool] = {}
         self.gbs_step_count: Dict[int, int] = {}
         self.gbs_delays: Dict[int, float] = {}
+        self.visited: Set[int] = set()  # 当前GBS的已访问节点
 
     # ------------------------------------------------------------------
     # 公共接口
@@ -82,16 +86,20 @@ class FLRoutingEnv:
         self.current_gbs = 0
         self.current_node = 0
         self.episode_step = 0
-        self.gbs_paths = {i: [i] for i in range(self.num_gbs)}   # 路径包含起点
+        self.gbs_paths = {i: [i] for i in range(self.num_gbs)}
         self.gbs_rewards = {i: 0.0 for i in range(self.num_gbs)}
         self.gbs_success = {i: False for i in range(self.num_gbs)}
         self.gbs_step_count = {i: 0 for i in range(self.num_gbs)}
         self.gbs_delays = {i: 0.0 for i in range(self.num_gbs)}
+        self.visited = {0}  # GBS0已访问
         return self._obs()
 
     def step(self, action: int):
         self.episode_step += 1
         self.gbs_step_count[self.current_gbs] += 1
+
+        # episode内步级链路波动（模拟UAV实时移动）
+        self.topo.step_fluctuation()
 
         valid_actions = self.topo.successors(self.current_node)
         action_valid = action in valid_actions
@@ -102,6 +110,7 @@ class FLRoutingEnv:
         if action_valid:
             self.gbs_paths[self.current_gbs].append(action)
             self.current_node = action
+            self.visited.add(action)
         self.gbs_rewards[self.current_gbs] += reward
 
         gbs_done = (self.current_node == self.server_id)
@@ -121,7 +130,22 @@ class FLRoutingEnv:
             self.current_gbs += 1
             all_done = self.current_gbs >= self.num_gbs
             if not all_done:
+                # 重置visited集合，开始新GBS的路由
                 self.current_node = self.current_gbs
+                self.visited = {self.current_gbs}
+            else:
+                # 所有GBS完成：加入episode级T_up奖励
+                success_paths = {
+                    g: self.gbs_paths[g]
+                    for g in range(self.num_gbs) if self.gbs_success[g]
+                }
+                if success_paths:
+                    t_up, _ = self.delay_model.upload_delay(success_paths, self.topo)
+                    if t_up < float('inf'):
+                        # T_up越小额外奖励越高，归一化后缩放
+                        tup_bonus = self.beta_tup * (1.0 - self.delay_model.normalize_delay(t_up))
+                        reward += tup_bonus
+                        self.gbs_rewards[self.current_gbs - 1] += tup_bonus
             terminated = all_done
         else:
             terminated = False
@@ -189,6 +213,10 @@ class FLRoutingEnv:
         if not valid:
             return self.r_fail * 0.1, {"reason": "invalid"}
 
+        # 环路检测：已访问节点给惩罚
+        if nxt in self.visited and nxt != self.server_id:
+            return self.r_loop, {"reason": "loop"}
+
         if reached:
             return self.r_success, {"reason": "reached"}
 
@@ -197,7 +225,7 @@ class FLRoutingEnv:
         link_load_r = 1.0 - self.topo.link_load_ratio(cur, nxt)
         distr_cost = self._distribution_cost(nxt)
 
-        # 链路时延惩罚（归一化）
+        # 链路时延惩罚（基于实际可用带宽，不均匀容量更有区分度）
         bw = max(self.topo.available_bandwidth(cur, nxt), 0.1)
         link_delay = (self.delay_model.cfg.model_size + self.delay_model.cfg.packet_size) / bw
         delay_penalty = self.delay_model.normalize_delay(link_delay)
@@ -227,6 +255,10 @@ class FLRoutingEnv:
         gbs_id = min(self.current_gbs, self.num_gbs - 1)
         slot_norm = self.current_slot / max(self.num_slots, 1)
         model_norm = self.delay_model.cfg.model_size / 100.0
+        visited_flags = np.array(
+            [1.0 if i in self.visited else 0.0 for i in range(self.num_nodes)],
+            dtype=np.float32
+        )
         obs = np.concatenate([
             [float(gbs_id) / self.num_gbs],
             [float(self.current_node) / self.num_nodes],
@@ -235,5 +267,6 @@ class FLRoutingEnv:
             [slot_norm],
             self.topo.get_node_feature_vector(),
             self.topo.get_link_feature_vector(),
+            visited_flags,
         ], dtype=np.float32)
         return obs

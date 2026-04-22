@@ -23,12 +23,21 @@ from src.agents.a3c import PolicyNet, ValueNet
 # 参数
 # ======================================================
 CFG = {
-    "node_capacity": 50, "link_capacity": 100.0,
+    # 网络（不均匀容量，高负载场景）
+    "node_capacity": 50,
+    "gbs_to_router_capacity": 20.0,    # 接入链路窄（瓶颈）
+    "router_to_router_capacity": 40.0, # 骨干链路中等
+    "router_to_server_capacity": 80.0, # 汇聚链路宽
+    # FL
     "model_size": 10.0, "t_agg": 0.5,
+    # 时隙
     "delta_t": 5.0, "num_slots": 100,
+    # 奖励（增强时延权重，加入环路惩罚和T_up奖励）
     "g_hop": -1.0, "alpha_1": 0.4, "alpha_2": 0.1,
-    "w_delay": 0.2, "r_success": 20.0, "r_fail": -5.0,
+    "w_delay": 0.5, "r_success": 20.0, "r_fail": -5.0,
+    "r_loop": -2.0, "beta_tup": 2.0,
     "max_steps_per_gbs": 50,
+    # 训练
     "hidden_dim": 256, "actor_lr": 1e-3, "critic_lr": 1e-3,
     "gamma": 0.98, "output_dir": "outputs",
 }
@@ -36,11 +45,17 @@ CFG = {
 
 def make_env():
     return FLRoutingEnv(
-        topo_cfg=TopologyConfig(node_capacity=CFG["node_capacity"], link_capacity=CFG["link_capacity"]),
+        topo_cfg=TopologyConfig(
+            node_capacity=CFG["node_capacity"],
+            gbs_to_router_capacity=CFG["gbs_to_router_capacity"],
+            router_to_router_capacity=CFG["router_to_router_capacity"],
+            router_to_server_capacity=CFG["router_to_server_capacity"],
+        ),
         delay_cfg=DelayConfig(model_size=CFG["model_size"], t_agg=CFG["t_agg"]),
         delta_t=CFG["delta_t"], num_slots=CFG["num_slots"],
         g_hop=CFG["g_hop"], alpha_1=CFG["alpha_1"], alpha_2=CFG["alpha_2"],
         w_delay=CFG["w_delay"], r_success=CFG["r_success"], r_fail=CFG["r_fail"],
+        r_loop=CFG["r_loop"], beta_tup=CFG["beta_tup"],
         max_steps_per_gbs=CFG["max_steps_per_gbs"],
     )
 
@@ -149,7 +164,7 @@ def train(n_episodes: int = 300, log_every: int = 20):
             tup_str = f"{np.mean(valid_tup):.3f}s" if valid_tup else "N/A"
             print(f"Ep {ep:4d} | AvgR={avg_r:6.2f} | Succ={avg_succ:.2f} | T_up={tup_str} | Slot={result['current_slot']}")
 
-    # 保存
+    # 保存结果
     out_json = f"{CFG['output_dir']}/logs/a3c_single_{timestamp}.json"
     with open(out_json, "w") as f:
         json.dump(all_results, f, indent=2)
@@ -158,6 +173,11 @@ def train(n_episodes: int = 300, log_every: int = 20):
     t_ups = np.array([r["T_up"] for r in all_results])
     np.save(f"{CFG['output_dir']}/logs/a3c_rewards_{timestamp}.npy", np.array(rewards))
     np.save(f"{CFG['output_dir']}/logs/a3c_tup_{timestamp}.npy", t_ups)
+
+    # 保存模型（供compare.py使用）
+    os.makedirs(f"{CFG['output_dir']}/models", exist_ok=True)
+    torch.save(actor.state_dict(), f"{CFG['output_dir']}/models/actor_{timestamp}.pth")
+    print(f"模型已保存: {CFG['output_dir']}/models/actor_{timestamp}.pth")
 
     valid_tup = t_ups[t_ups > 0]
     print("\n" + "=" * 60)
@@ -170,7 +190,7 @@ def train(n_episodes: int = 300, log_every: int = 20):
     print(f"结果: {out_json}")
     print("=" * 60)
 
-    return all_results
+    return all_results, actor
 
 
 if __name__ == "__main__":
@@ -178,4 +198,4 @@ if __name__ == "__main__":
     parser.add_argument("--episodes", type=int, default=300)
     parser.add_argument("--log_every", type=int, default=20)
     args = parser.parse_args()
-    train(args.episodes, args.log_every)
+    train(args.episodes, args.log_every)  # returns (results, actor)

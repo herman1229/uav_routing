@@ -1,18 +1,19 @@
 """
 基线算法1：最短路径（跳数最少）
-基线算法2：负载感知Dijkstra（以链路时延为边权）
-基线算法3：随机路由
+基线算法2：负载感知Dijkstra（以链路时延为边权，每步重新计算 = 在线自适应版）
+基线算法3：负载感知Dijkstra（路由开始时计算一次路径，沿路执行 = 离线版，更贴近真实）
+基线算法4：随机路由
 """
 import networkx as nx
 import numpy as np
 import random
-from typing import List, Optional
+from typing import List, Optional, Dict
 
 from ..envs.fl_routing_env import FLRoutingEnv
 
 
 def _run_episode(env: FLRoutingEnv, policy_fn) -> dict:
-    """通用episode运行框架"""
+    """通用episode运行框架（每步调用policy_fn）"""
     state = env.reset()
     done = False
     while not done:
@@ -22,6 +23,22 @@ def _run_episode(env: FLRoutingEnv, policy_fn) -> dict:
         action = policy_fn(env, valid)
         state, _, done, _, _ = env.step(action)
     return env.get_episode_result()
+
+
+def _compute_dijkstra_path(env: FLRoutingEnv, src: int) -> List[int]:
+    """计算从src到server的Dijkstra最短路径（以当前链路时延为权重）"""
+    M = env.delay_model.cfg.model_size
+    L = env.delay_model.cfg.packet_size
+    weighted_graph = nx.DiGraph()
+    for u, v in env.topo.edges:
+        bw = max(env.topo.available_bandwidth(u, v), 0.1)
+        weight = (M + L) / bw + env.delay_model.cfg.hop_delay
+        weighted_graph.add_edge(u, v, weight=weight)
+    try:
+        path = nx.shortest_path(weighted_graph, src, env.server_id, weight='weight')
+        return path
+    except (nx.NetworkXNoPath, nx.NodeNotFound):
+        return []
 
 
 # ------------------------------------------------------------------
