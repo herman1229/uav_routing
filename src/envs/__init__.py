@@ -2,3 +2,4 @@ from .topology import NetworkTopology, TopologyConfig
 from .delay_model import DelayModel, DelayConfig
 from .fl_routing_env import FLRoutingEnv
 from .concurrent_fl_env import ConcurrentFLRoutingEnv
+from .marl_env import MARLRoutingEnv
