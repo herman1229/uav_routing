@@ -1,0 +1,37 @@
+{
+  "A3C-Full": {
+    "mean_T_up": 19.519067876853597,
+    "median_T_up": 3.89868494961376,
+    "std_T_up": 36.26665607050987,
+    "bad_rate": 0.13333333333333333,
+    "mean_diversity": 3.0
+  },
+  "w/o CompState": {
+    "mean_T_up": 22.90959325932507,
+    "median_T_up": 4.180094405639721,
+    "std_T_up": 39.80752987067806,
+    "bad_rate": 0.16333333333333333,
+    "mean_diversity": 3.0
+  },
+  "w/o CompReward": {
+    "mean_T_up": 63.385180892173985,
+    "median_T_up": 111.8613539043798,
+    "std_T_up": 55.710250644515156,
+    "bad_rate": 0.5233333333333333,
+    "mean_diversity": 2.0
+  },
+  "w/o ConcModel": {
+    "mean_T_up": 22.90959325932507,
+    "median_T_up": 4.180094405639721,
+    "std_T_up": 39.80752987067806,
+    "bad_rate": 0.16333333333333333,
+    "mean_diversity": 3.0
+  },
+  "w/o TrainImpv": {
+    "mean_T_up": 22.90959325932507,
+    "median_T_up": 4.180094405639721,
+    "std_T_up": 39.80752987067806,
+    "bad_rate": 0.16333333333333333,
+    "mean_diversity": 3.0
+  }
+}

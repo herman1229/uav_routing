@@ -1,0 +1,172 @@
+{
+  "1": {
+    "A3C (Ours)": {
+      "mean_T_up": 2.281406607605573,
+      "median_T_up": 1.9758042010259511,
+      "std_T_up": 1.3001954523268655,
+      "bad_rate": 0.0,
+      "success_rate": 1.0,
+      "mean_diversity": 1.0
+    },
+    "DQN": {
+      "mean_T_up": 2.786145114494591,
+      "median_T_up": 2.2689520016003293,
+      "std_T_up": 6.42271312129132,
+      "bad_rate": 0.0033333333333333335,
+      "success_rate": 1.0,
+      "mean_diversity": 1.26
+    },
+    "LAD-Dijkstra": {
+      "mean_T_up": 2.281406607605573,
+      "median_T_up": 1.9758042010259511,
+      "std_T_up": 1.3001954523268655,
+      "bad_rate": 0.0,
+      "success_rate": 1.0,
+      "mean_diversity": 1.0
+    },
+    "ShortestPath": {
+      "mean_T_up": 2.281406607605573,
+      "median_T_up": 1.9758042010259511,
+      "std_T_up": 1.3001954523268655,
+      "bad_rate": 0.0,
+      "success_rate": 1.0,
+      "mean_diversity": 1.0
+    }
+  },
+  "3": {
+    "A3C (Ours)": {
+      "mean_T_up": 17.14523698922663,
+      "median_T_up": 4.34842000196578,
+      "std_T_up": 33.65841977707991,
+      "bad_rate": 0.11333333333333333,
+      "success_rate": 1.0,
+      "mean_diversity": 3.0
+    },
+    "DQN": {
+      "mean_T_up": 17.14523698922663,
+      "median_T_up": 4.34842000196578,
+      "std_T_up": 33.65841977707991,
+      "bad_rate": 0.11333333333333333,
+      "success_rate": 1.0,
+      "mean_diversity": 3.0
+    },
+    "LAD-Dijkstra": {
+      "mean_T_up": 27.444357682479858,
+      "median_T_up": 4.372117327373031,
+      "std_T_up": 45.06607939016409,
+      "bad_rate": 0.20333333333333334,
+      "success_rate": 1.0,
+      "mean_diversity": 2.513333333333333
+    },
+    "ShortestPath": {
+      "mean_T_up": 70.33325510646871,
+      "median_T_up": 112.13763614300937,
+      "std_T_up": 53.19357069765131,
+      "bad_rate": 0.5966666666666667,
+      "success_rate": 1.0,
+      "mean_diversity": 2.0
+    }
+  },
+  "5": {
+    "A3C (Ours)": {
+      "mean_T_up": 67.65122299470012,
+      "median_T_up": 111.80052939855148,
+      "std_T_up": 54.999244741082435,
+      "bad_rate": 0.5533333333333333,
+      "success_rate": 1.0,
+      "mean_diversity": 4.0
+    },
+    "DQN": {
+      "mean_T_up": 34.11160384599704,
+      "median_T_up": 7.954016643892375,
+      "std_T_up": 45.369308073420015,
+      "bad_rate": 0.25,
+      "success_rate": 1.0,
+      "mean_diversity": 4.0
+    },
+    "LAD-Dijkstra": {
+      "mean_T_up": 39.602084474498476,
+      "median_T_up": 6.938982155063112,
+      "std_T_up": 49.895598896163555,
+      "bad_rate": 0.3,
+      "success_rate": 1.0,
+      "mean_diversity": 3.6733333333333333
+    },
+    "ShortestPath": {
+      "mean_T_up": 72.85215865145454,
+      "median_T_up": 112.11278844640537,
+      "std_T_up": 56.314890062256325,
+      "bad_rate": 0.5866666666666667,
+      "success_rate": 1.0,
+      "mean_diversity": 4.0
+    }
+  },
+  "7": {
+    "A3C (Ours)": {
+      "mean_T_up": 228.81042013057294,
+      "median_T_up": 224.70621123115473,
+      "std_T_up": 79.93124316043759,
+      "bad_rate": 0.9933333333333333,
+      "success_rate": 1.0,
+      "mean_diversity": 6.0
+    },
+    "DQN": {
+      "mean_T_up": 202.55665679258547,
+      "median_T_up": 223.09541732706344,
+      "std_T_up": 66.86396108689902,
+      "bad_rate": 1.0,
+      "success_rate": 1.0,
+      "mean_diversity": 5.566666666666666
+    },
+    "LAD-Dijkstra": {
+      "mean_T_up": 161.86263082979343,
+      "median_T_up": 126.99236283651915,
+      "std_T_up": 67.12975413377525,
+      "bad_rate": 0.9566666666666667,
+      "success_rate": 1.0,
+      "mean_diversity": 4.99
+    },
+    "ShortestPath": {
+      "mean_T_up": 245.38255949108154,
+      "median_T_up": 225.5902429354747,
+      "std_T_up": 60.72373414805534,
+      "bad_rate": 1.0,
+      "success_rate": 1.0,
+      "mean_diversity": 4.0
+    }
+  },
+  "10": {
+    "A3C (Ours)": {
+      "mean_T_up": 304.1328753230213,
+      "median_T_up": 332.6445582195232,
+      "std_T_up": 73.57118821574332,
+      "bad_rate": 1.0,
+      "success_rate": 1.0,
+      "mean_diversity": 7.996666666666667
+    },
+    "DQN": {
+      "mean_T_up": 349.14809651384826,
+      "median_T_up": 338.41917230119844,
+      "std_T_up": 112.44516874331106,
+      "bad_rate": 1.0,
+      "success_rate": 1.0,
+      "mean_diversity": 8.0
+    },
+    "LAD-Dijkstra": {
+      "mean_T_up": 304.1272187658184,
+      "median_T_up": 332.6904294707542,
+      "std_T_up": 85.65221837571521,
+      "bad_rate": 1.0,
+      "success_rate": 1.0,
+      "mean_diversity": 6.93
+    },
+    "ShortestPath": {
+      "mean_T_up": 373.7171642494341,
+      "median_T_up": 342.9584500677021,
+      "std_T_up": 53.16510852488872,
+      "bad_rate": 1.0,
+      "success_rate": 1.0,
+      "mean_diversity": 5.0
+    }
+  }
+}

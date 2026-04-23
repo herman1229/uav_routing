@@ -1,0 +1,172 @@
+{
+  "1": {
+    "A3C (Ours)": {
+      "mean_T_up": 3.1171491438726258,
+      "median_T_up": 3.011407397821715,
+      "std_T_up": 0.7373478475558513,
+      "bad_rate": 0.0,
+      "success_rate": 1.0,
+      "mean_diversity": 2.0
+    },
+    "DQN": {
+      "mean_T_up": 2.229957134776344,
+      "median_T_up": 1.9157167660533867,
+      "std_T_up": 0.6470278688731639,
+      "bad_rate": 0.0,
+      "success_rate": 1.0,
+      "mean_diversity": 1.0
+    },
+    "LAD-Dijkstra": {
+      "mean_T_up": 2.229957134776344,
+      "median_T_up": 1.9157167660533867,
+      "std_T_up": 0.6470278688731639,
+      "bad_rate": 0.0,
+      "success_rate": 1.0,
+      "mean_diversity": 1.0
+    },
+    "ShortestPath": {
+      "mean_T_up": 2.229957134776344,
+      "median_T_up": 1.9157167660533867,
+      "std_T_up": 0.6470278688731639,
+      "bad_rate": 0.0,
+      "success_rate": 1.0,
+      "mean_diversity": 1.0
+    }
+  },
+  "3": {
+    "A3C (Ours)": {
+      "mean_T_up": 32.8681387561859,
+      "median_T_up": 5.923998015126981,
+      "std_T_up": 46.22366024759484,
+      "bad_rate": 0.25,
+      "success_rate": 1.0,
+      "mean_diversity": 3.0
+    },
+    "DQN": {
+      "mean_T_up": 32.8681387561859,
+      "median_T_up": 5.923998015126981,
+      "std_T_up": 46.22366024759484,
+      "bad_rate": 0.25,
+      "success_rate": 1.0,
+      "mean_diversity": 3.0
+    },
+    "LAD-Dijkstra": {
+      "mean_T_up": 44.54315566179553,
+      "median_T_up": 7.966916897602358,
+      "std_T_up": 50.42938190923428,
+      "bad_rate": 0.35,
+      "success_rate": 1.0,
+      "mean_diversity": 2.45
+    },
+    "ShortestPath": {
+      "mean_T_up": 82.75288186630522,
+      "median_T_up": 112.53271596959465,
+      "std_T_up": 48.35276088278006,
+      "bad_rate": 0.7,
+      "success_rate": 1.0,
+      "mean_diversity": 2.0
+    }
+  },
+  "5": {
+    "A3C (Ours)": {
+      "mean_T_up": 87.61544382211892,
+      "median_T_up": 112.73219844387316,
+      "std_T_up": 57.992412684264934,
+      "bad_rate": 0.7,
+      "success_rate": 1.0,
+      "mean_diversity": 3.0
+    },
+    "DQN": {
+      "mean_T_up": 210.91190030826266,
+      "median_T_up": 225.60652310764544,
+      "std_T_up": 70.51609014577903,
+      "bad_rate": 1.0,
+      "success_rate": 1.0,
+      "mean_diversity": 5.0
+    },
+    "LAD-Dijkstra": {
+      "mean_T_up": 45.48801491922081,
+      "median_T_up": 10.110066452824276,
+      "std_T_up": 51.06993712976941,
+      "bad_rate": 0.35,
+      "success_rate": 1.0,
+      "mean_diversity": 3.7
+    },
+    "ShortestPath": {
+      "mean_T_up": 75.43185858261508,
+      "median_T_up": 111.94736379548235,
+      "std_T_up": 69.03171993415462,
+      "bad_rate": 0.55,
+      "success_rate": 1.0,
+      "mean_diversity": 4.0
+    }
+  },
+  "7": {
+    "A3C (Ours)": {
+      "mean_T_up": 188.7698340827132,
+      "median_T_up": 222.60535648711763,
+      "std_T_up": 60.1051975447148,
+      "bad_rate": 1.0,
+      "success_rate": 1.0,
+      "mean_diversity": 5.0
+    },
+    "DQN": {
+      "mean_T_up": 242.7142830436995,
+      "median_T_up": 225.39121837312115,
+      "std_T_up": 70.18708052252121,
+      "bad_rate": 1.0,
+      "success_rate": 1.0,
+      "mean_diversity": 4.0
+    },
+    "LAD-Dijkstra": {
+      "mean_T_up": 152.53874842736667,
+      "median_T_up": 124.44846342975924,
+      "std_T_up": 57.31130972397727,
+      "bad_rate": 0.95,
+      "success_rate": 1.0,
+      "mean_diversity": 4.9
+    },
+    "ShortestPath": {
+      "mean_T_up": 248.0584071361754,
+      "median_T_up": 225.39121837312115,
+      "std_T_up": 64.26964012156544,
+      "bad_rate": 1.0,
+      "success_rate": 1.0,
+      "mean_diversity": 4.0
+    }
+  },
+  "10": {
+    "A3C (Ours)": {
+      "mean_T_up": 19.570530192422083,
+      "median_T_up": 22.391444197990637,
+      "std_T_up": 15.053997250349276,
+      "bad_rate": 0.05,
+      "success_rate": 0.5,
+      "mean_diversity": 5.0
+    },
+    "DQN": {
+      "mean_T_up": 386.1477751158239,
+      "median_T_up": 412.55880140093586,
+      "std_T_up": 68.61519035688103,
+      "bad_rate": 1.0,
+      "success_rate": 1.0,
+      "mean_diversity": 6.2
+    },
+    "LAD-Dijkstra": {
+      "mean_T_up": 300.5636319990638,
+      "median_T_up": 295.37305872124284,
+      "std_T_up": 71.23851881844809,
+      "bad_rate": 1.0,
+      "success_rate": 1.0,
+      "mean_diversity": 6.8
+    },
+    "ShortestPath": {
+      "mean_T_up": 363.17225796481165,
+      "median_T_up": 351.782818859744,
+      "std_T_up": 36.189762651391575,
+      "bad_rate": 1.0,
+      "success_rate": 1.0,
+      "mean_diversity": 5.0
+    }
+  }
+}
