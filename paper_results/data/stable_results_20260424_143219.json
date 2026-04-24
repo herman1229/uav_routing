@@ -1,0 +1,130 @@
+{
+  "stats": {
+    "3": {
+      "PPO (Ours)": {
+        "conv_rate": 0.0,
+        "conv_count": 0,
+        "n_runs": 5,
+        "conv_medians": [],
+        "mean_conv_med": 999.0
+      },
+      "A3C": {
+        "conv_rate": 0.8,
+        "conv_count": 4,
+        "n_runs": 5,
+        "conv_medians": [
+          4.808945772861945,
+          4.808945772861945,
+          3.981072129831753,
+          4.86021484349709
+        ],
+        "mean_conv_med": 4.614794629763184
+      },
+      "DQN": {
+        "conv_rate": 1.0,
+        "conv_count": 5,
+        "n_runs": 5,
+        "conv_medians": [
+          4.808945772861945,
+          4.808945772861945,
+          4.998964764885365,
+          5.319310165383292,
+          4.379523636294152
+        ],
+        "mean_conv_med": 4.86313802245734
+      }
+    },
+    "5": {
+      "PPO (Ours)": {
+        "conv_rate": 0.0,
+        "conv_count": 0,
+        "n_runs": 5,
+        "conv_medians": [],
+        "mean_conv_med": 999.0
+      },
+      "A3C": {
+        "conv_rate": 0.4,
+        "conv_count": 2,
+        "n_runs": 5,
+        "conv_medians": [
+          6.775571832443568,
+          6.668613185615127
+        ],
+        "mean_conv_med": 6.7220925090293475
+      },
+      "DQN": {
+        "conv_rate": 0.6,
+        "conv_count": 3,
+        "n_runs": 5,
+        "conv_medians": [
+          7.248336360328617,
+          5.686039361773185,
+          6.58226559375348
+        ],
+        "mean_conv_med": 6.5055471052850935
+      }
+    }
+  },
+  "best_eval": {
+    "3": {
+      "PPO (Ours)": {
+        "mean_T_up": 999.0,
+        "median_T_up": 999.0,
+        "std_T_up": 0.0,
+        "bad_rate": 1.0,
+        "mean_diversity": 2.16
+      },
+      "A3C": {
+        "mean_T_up": 17.3621148454281,
+        "median_T_up": 3.965465227397912,
+        "std_T_up": 34.40020707640734,
+        "bad_rate": 0.11333333333333333,
+        "mean_diversity": 3.0
+      },
+      "DQN": {
+        "mean_T_up": 16.93183325239498,
+        "median_T_up": 4.059144501115447,
+        "std_T_up": 33.613860037960485,
+        "bad_rate": 0.11,
+        "mean_diversity": 3.0
+      },
+      "LAD-Dijkstra": {
+        "mean_T_up": 27.530865752914984,
+        "median_T_up": 4.5018402747866055,
+        "std_T_up": 44.61566819836891,
+        "bad_rate": 0.20333333333333334,
+        "mean_diversity": 2.4966666666666666
+      }
+    },
+    "5": {
+      "PPO (Ours)": {
+        "mean_T_up": 172.40036055789633,
+        "median_T_up": 71.64082036358208,
+        "std_T_up": 218.5654259213099,
+        "bad_rate": 0.5911330049261084,
+        "mean_diversity": 4.556666666666667
+      },
+      "A3C": {
+        "mean_T_up": 38.48401375346065,
+        "median_T_up": 6.882530223562263,
+        "std_T_up": 48.51783856201841,
+        "bad_rate": 0.2966666666666667,
+        "mean_diversity": 4.0
+      },
+      "DQN": {
+        "mean_T_up": 29.982685310478058,
+        "median_T_up": 6.364323361533973,
+        "std_T_up": 43.76783117253941,
+        "bad_rate": 0.21666666666666667,
+        "mean_diversity": 3.9966666666666666
+      },
+      "LAD-Dijkstra": {
+        "mean_T_up": 39.01916646835735,
+        "median_T_up": 7.265706460395695,
+        "std_T_up": 49.483241380852014,
+        "bad_rate": 0.29,
+        "mean_diversity": 3.6533333333333333
+      }
+    }
+  }
+}
